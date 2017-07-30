@@ -15,7 +15,7 @@
 })(function (signet, match) {
     'use strict';
 
-    // let boxTypeRegistry = {};
+    let boxTypeRegistry = {};
 
     signet.subtype('function')('boxType', function (value) {
         return value.isBoxType();
@@ -35,6 +35,7 @@
     });
 
     const isUndefined = signet.isTypeOf('undefined');
+    const isString = signet.isTypeOf('string');
 
     function setProperty(boxFn, key, property) {
         Object.defineProperty(boxFn, key, {
@@ -144,12 +145,68 @@
         }
     );
 
+    function buildSignetTypeCheck() {
+        return function (value, options) {
+            const contentValue = value();
+            return signet.isTypeOf(options[0])(contentValue);
+        }
+    }
+
+    function register(boxTypeName) {
+        const boxingFunction = boxWithType(boxTypeName);
+        boxTypeRegistry[boxTypeName] = boxingFunction;
+        signet.subtype('boxType')(boxTypeName, buildSignetTypeCheck());
+
+        return boxingFunction;
+    }
+
+    const isType = signet.isTypeOf('type');
+
+    function throwOnBadType(value, valueType) {
+        if (isType(valueType) && !signet.isTypeOf(valueType)(value)) {
+            throw new Error(`Cannot cast value "${value}" of type ${typeof value} to ${valueType}`);
+        }
+    }
+
+    function boxValue(value, boxTypeName, valueType) {
+        throwOnBadType(value, valueType);
+
+        const valueTypeStr = match(valueType, (matchCase, matchDefault) => {
+            matchCase(isString, valueType => valueType);
+            matchDefault(() => typeof value);
+        });
+
+        function boxType() { return value; }
+
+        return setStandardProperties(boxType, boxTypeName, valueTypeStr);
+    }
+
+    function boxWithType(boxTypeName) {
+        return function (valueType) {
+            return function (value) {
+                return boxValue(value, boxTypeName, valueType);
+            };
+        };
+    }
+
+    const boxWith = signet.enforce(
+        'boxTypeName:string => valueType:?composite<string, type> => value:* => *',
+        function (boxType) {
+            if(isUndefined(boxTypeRegistry[boxType])) {
+                throw new Error (`'No box type "${boxType}" exists'`);
+            }
+
+            return boxTypeRegistry[boxType];
+        }
+    );
 
     return {
+        boxWith: boxWith,
         either: either,
         just: just,
         maybe: maybe,
         none: none,
+        register: register,
         some: some
     };
 

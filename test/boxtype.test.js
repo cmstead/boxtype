@@ -13,9 +13,10 @@ describe('boxtype', function () {
     require('./test-utils/approvals-config');
 
     var boxtype;
+    var signet;
 
     beforeEach(function () {
-        const signet = require('signet')();
+        signet = require('signet')();
         boxtype = require('../index.js')(signet);
     });
 
@@ -100,8 +101,54 @@ describe('boxtype', function () {
     describe('register', function () {
 
         it('should register a boxtype for use', function () {
+            boxtype.register('Container');
 
+            const boxedValue = boxtype.boxWith('Container')('int')(99);
+            const typeCheck = signet.isTypeOf('Container<int>')(boxedValue);
+
+            assert.equal(boxedValue.toString(), 'Container<int>(99)');
+            assert.equal(typeCheck, true);
         });
+
+        it('should return a boxing function', function () {
+            const boxInContainer = boxtype.register('Container');
+
+            const boxedValue = boxInContainer('int')(99);
+            const typeCheck = signet.isTypeOf('Container<int>')(boxedValue);
+
+            assert.equal(boxedValue.toString(), 'Container<int>(99)');
+            assert.equal(typeCheck, true);
+        });
+
+    });
+
+    describe('boxWith', function () {
+
+        it('should box a value when no type is provided', function () {
+            boxtype.register('Container');
+
+            const boxedValue = boxtype.boxWith('Container')()(99.5);
+            const typeCheck = signet.isTypeOf('Container<number>')(boxedValue);
+
+            assert.equal(boxedValue.toString(), 'Container<number>(99.5)');
+            assert.equal(typeCheck, true);
+        });
+
+        it('should throw an error no box type exists', function () {
+            const message = 'No box type "BadBox" exists';
+            assert.throws(boxtype.boxWith.bind(null, 'BadBox'), message);
+        });
+
+        it('should throw an error when trying to box the wrong type', function () {
+            boxtype.register('Container');
+
+            const boxPassedValue = boxtype.boxWith('Container')('int');
+
+            const message = 'Cannot cast value "foo" of type string to int';
+            assert.throws(boxPassedValue.bind(null, 'foo'), message);
+        });
+
+
 
     });
 
