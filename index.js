@@ -34,8 +34,11 @@
             && signet.isTypeOf(subtype[0])(value());
     });
 
-    const isUndefined = signet.isTypeOf('undefined');
+    const isArray = signet.isTypeOf('array');
+    const isFunction = signet.isTypeOf('function');
+    const isObjectInstance = signet.isTypeOf('composite<not<null>, object>');
     const isString = signet.isTypeOf('string');
+    const isUndefined = signet.isTypeOf('undefined');
 
     function setProperty(boxFn, key, property) {
         Object.defineProperty(boxFn, key, {
@@ -60,7 +63,7 @@
     }
 
     function buildToString(boxFn) {
-        return () => `${boxFn.boxType}<${boxFn.currentType}>(${boxFn().toString()})`
+        return () => `[${boxFn.boxType} ${boxFn.currentType}](${boxFn().toString()})`
     }
 
     function setStandardMetadata(boxFn, boxType, valueType) {
@@ -168,15 +171,37 @@
         }
     }
 
+    function shallowClone (obj) {
+        const keys = Object.keys(obj);
+        let container = isArray(obj) ? [] : {};
+
+        return keys.reduce((result, key) => {
+            result[key] = obj[key];
+            return result;
+        }, container);
+    }
+
+    function identity (a) {
+        return a;
+    }
+
     function boxValue(value, boxTypeName, valueType) {
         throwOnBadType(value, valueType);
+
+        const cloneAction = isObjectInstance(value) ? shallowClone : identity;
+        let safeValue = cloneAction(value);
 
         const valueTypeStr = match(valueType, (matchCase, matchDefault) => {
             matchCase(isString, valueType => valueType);
             matchDefault(() => typeof value);
         });
 
-        function boxType() { return value; }
+        function boxType(transform) {
+            const returnValue = cloneAction(safeValue);
+            const transformation = isFunction(transform) ? transform : identity;
+
+            return transformation(returnValue);
+        }
 
         return setStandardProperties(boxType, boxTypeName, valueTypeStr);
     }
@@ -200,7 +225,14 @@
         }
     );
 
+    register('TypedValue');
+
+    function typeWith(typeName) {
+        return boxWith('TypedValue')(typeName);
+    }
+
     return {
+        typeWith: typeWith,
         boxWith: boxWith,
         either: either,
         just: just,

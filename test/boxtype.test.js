@@ -60,7 +60,7 @@ describe('boxtype', function () {
 
         it('should return Just<string>(foo) when calling toString', function () {
             const justFoo = boxtype.just('foo');
-            assert.equal(justFoo.toString(), 'Just<string>(foo)');
+            assert.equal(justFoo.toString(), '[Just string](foo)');
         });
 
         it('should return the value from valueOf', function () {
@@ -106,7 +106,7 @@ describe('boxtype', function () {
             const boxedValue = boxtype.boxWith('Container')('int')(99);
             const typeCheck = signet.isTypeOf('Container<int>')(boxedValue);
 
-            assert.equal(boxedValue.toString(), 'Container<int>(99)');
+            assert.equal(boxedValue.toString(), '[Container int](99)');
             assert.equal(typeCheck, true);
         });
 
@@ -116,7 +116,7 @@ describe('boxtype', function () {
             const boxedValue = boxInContainer('int')(99);
             const typeCheck = signet.isTypeOf('Container<int>')(boxedValue);
 
-            assert.equal(boxedValue.toString(), 'Container<int>(99)');
+            assert.equal(boxedValue.toString(), '[Container int](99)');
             assert.equal(typeCheck, true);
         });
 
@@ -130,7 +130,7 @@ describe('boxtype', function () {
             const boxedValue = boxtype.boxWith('Container')()(99.5);
             const typeCheck = signet.isTypeOf('Container<number>')(boxedValue);
 
-            assert.equal(boxedValue.toString(), 'Container<number>(99.5)');
+            assert.equal(boxedValue.toString(), '[Container number](99.5)');
             assert.equal(typeCheck, true);
         });
 
@@ -148,7 +148,58 @@ describe('boxtype', function () {
             assert.throws(boxPassedValue.bind(null, 'foo'), message);
         });
 
+    });
 
+    describe('typeWith', function () {
+
+        it('should box value in a generic type wrapper', function () {
+            const originalValue = [1, 2, 3, 4];
+            const myValue = boxtype.typeWith('array<int>')(originalValue);
+            const typeOk = signet.isTypeOf('TypedValue<array<int>>')(myValue);
+
+            assert.equal(myValue.toString(), '[TypedValue array<int>](1,2,3,4)');
+            assert.equal(myValue.valueOf().toString(), originalValue.toString());
+            assert.equal(typeOk, true);
+        });
+
+    });
+
+    describe('boxing and unboxing', function () {
+
+        it('should shallow clone objects on boxing', function () {
+            let originalData = { foo: 'bar' };
+            const myValue = boxtype.boxWith('TypedValue')('object')(originalData);
+
+            originalData.baz = 'quux';
+            const myReturnedValue = myValue.valueOf();
+
+            assert.equal(myReturnedValue.baz, undefined);
+        });
+
+        it('should shallow clone objects on unboxing', function () {
+            const myValue = boxtype.boxWith('TypedValue')('object')({ foo: 'bar' });
+            let firstUnbox = myValue();
+            firstUnbox.baz = 'quux';
+
+            const secondUnbox = myValue();
+
+            assert.equal(secondUnbox.baz, undefined);
+        });
+
+        it('should perform a transformation function when provided to unboxing action', function () {
+            function transform (value) {
+                let newObj = {};
+                newObj[value.foo] = 'foo';
+
+                return newObj;
+            }
+
+            const myValue = boxtype.typeWith('object')({ foo: 'bar' });
+            const myResult = myValue(transform);
+
+            assert.equal(myResult.bar, 'foo');
+            assert.equal(myResult.foo, undefined);
+        });
 
     });
 
