@@ -3,19 +3,18 @@
 
     if (isNode) {
         module.exports = function (signet) {
+            const registryFactory = require('./bin/registry');
             const matchlight = require('matchlight')(signet);
-            return moduleFactory(signet, matchlight.match);
+            return moduleFactory(signet, matchlight.match, registryFactory);
         }
     } else if (typeof signet === 'object' && typeof matchlight === 'object') {
-        window.boxtype = moduleFactory(signet, matchlight.match);
+        window.boxtype = moduleFactory(signet, matchlight.match, boxtypeRegistryFactory);
     } else {
         throw new Error('The module boxtype requires Signet and Matchlight to run.');
     }
 
-})(function (signet, match) {
+})(function (signet, match, registryFactory) {
     'use strict';
-
-    let boxTypeRegistry = {};
 
     signet.subtype('function')('boxType', function (value) {
         return value.isBoxType();
@@ -23,6 +22,7 @@
 
     signet.subtype('boxType')('None', (value) => value.boxType === 'None');
     signet.subtype('boxType')('Just', (value) => value.boxType === 'Just');
+
     signet.subtype('boxType')('Maybe{1}', (value, subtype) => {
         return value.boxType === 'Maybe'
             && (signet.isTypeOf(subtype[0])(value())
@@ -35,45 +35,72 @@
     });
 
     const isArray = signet.isTypeOf('array');
-    const isFunction = signet.isTypeOf('function');
-    const isObjectInstance = signet.isTypeOf('composite<not<null>, object>');
-    const isString = signet.isTypeOf('string');
+    const isBoxType = signet.isTypeOf('boxType');
+    // const isNone = signet.isTypeOf('None');
     const isUndefined = signet.isTypeOf('undefined');
 
-    function setProperty(boxFn, key, property) {
-        Object.defineProperty(boxFn, key, {
-            writeable: false,
-            value: property
-        });
-    }
+    const registry = registryFactory(
+        signet,
+        match,
+        setStandardProperties,
+        throwOnBadType,
+        shallowClone
+    );
 
-    function setGetter(boxFn, key, getter) {
-        Object.defineProperty(boxFn, key, {
-            get: getter
-        });
-    }
+    const setProperty = signet.enforce(
+        'boxFn:function, key:string, property:* => undefined',
 
-    function getGetter() {
-        return function getter() {
-            return match(this.typeTag, (matchCase, matchDefault) => {
-                matchCase(isUndefined, () => this.valueType);
-                matchDefault(() => this.typeTag);
+        function setProperty(boxFn, key, property) {
+            Object.defineProperty(boxFn, key, {
+                writeable: false,
+                value: property
             });
         }
-    }
+    );
 
-    function buildToString(boxFn) {
-        return () => `[${boxFn.boxType} ${boxFn.currentType}](${boxFn().toString()})`
-    }
+    const setGetter = signet.enforce(
+        'boxFn:function, key:string, property:* => undefined',
 
-    function setStandardMetadata(boxFn, boxType, valueType) {
-        setProperty(boxFn, 'isBoxType', () => true);
-        setProperty(boxFn, 'boxType', boxType);
-        setProperty(boxFn, 'valueType', valueType);
-        setGetter(boxFn, 'currentType', getGetter());
+        function setGetter(boxFn, key, getter) {
+            Object.defineProperty(boxFn, key, {
+                get: getter
+            });
+        }
+    );
 
-        return boxFn;
-    }
+    const getTypeGetter = signet.enforce(
+        '() => * => string',
+
+        function getTypeGetter() {
+            return function typeGetter() {
+                return match(this.typeTag, (matchCase, matchDefault) => {
+                    matchCase(isUndefined, () => this.valueType);
+                    matchDefault(() => this.typeTag);
+                });
+            }
+        }
+    );
+
+    const buildToString = signet.enforce(
+        'boxFn:function => () => string',
+
+        function buildToString(boxFn) {
+            return () => `[${boxFn.boxType} ${boxFn.currentType}](${boxFn().toString()})`
+        }
+    );
+
+    const setStandardMetadata = signet.enforce(
+        'boxFn:function, boxType:string, valueType:[string] => function',
+
+        function setStandardMetadata(boxFn, boxType, valueType) {
+            setProperty(boxFn, 'isBoxType', () => true);
+            setProperty(boxFn, 'boxType', boxType);
+            setProperty(boxFn, 'valueType', valueType);
+            setGetter(boxFn, 'currentType', getTypeGetter());
+
+            return boxFn;
+        }
+    );
 
     function setStandardFunctions(boxFn) {
         boxFn.toString = buildToString(boxFn);
@@ -99,6 +126,7 @@
 
     const none = signet.enforce(
         '() => None',
+
         function () {
             return none;
         }
@@ -110,14 +138,28 @@
 
     const just = signet.enforce(
         'value:* => Just<() => value:*>',
+
         function just(value) {
             function justValue() { return value; }
             return setStandardProperties(justValue, 'Just', typeof value);
         }
     );
 
+    const some = signet.enforce(
+        'value:* => *',
+
+        function some(value) {
+            return match(value, (matchCase, matchDefault) => {
+                matchCase(isUndefined, () => none);
+                matchCase(isBoxType, () => value());
+                matchDefault(() => value);
+            });
+        }
+    );
+
     const maybe = signet.enforce(
         'type:composite<string, type> => value:* => Maybe<*>',
+
         function maybe(type) {
             return function (value) {
                 const maybeValue = buildEitherValue(type, none, value);
@@ -128,6 +170,7 @@
 
     const either = signet.enforce(
         'type:composite<string, type>, defaultValue:* => * => Either<*>',
+
         function either(type, defaultValue) {
             const justDefault = just(defaultValue);
 
@@ -138,31 +181,6 @@
         }
     );
 
-    const some = signet.enforce(
-        'value:* => *',
-        function some(value) {
-            return match(value, (matchCase, matchDefault) => {
-                matchCase(isUndefined, () => none);
-                matchDefault(() => value);
-            });
-        }
-    );
-
-    function buildSignetTypeCheck() {
-        return function (value, options) {
-            const contentValue = value();
-            return signet.isTypeOf(options[0])(contentValue);
-        }
-    }
-
-    function register(boxTypeName) {
-        const boxingFunction = boxWithType(boxTypeName);
-        boxTypeRegistry[boxTypeName] = boxingFunction;
-        signet.subtype('boxType')(boxTypeName, buildSignetTypeCheck());
-
-        return boxingFunction;
-    }
-
     const isType = signet.isTypeOf('type');
 
     function throwOnBadType(value, valueType) {
@@ -171,7 +189,7 @@
         }
     }
 
-    function shallowClone (obj) {
+    function shallowClone(obj) {
         const keys = Object.keys(obj);
         let container = isArray(obj) ? [] : {};
 
@@ -181,55 +199,29 @@
         }, container);
     }
 
-    function identity (a) {
-        return a;
-    }
-
-    function boxValue(value, boxTypeName, valueType) {
-        throwOnBadType(value, valueType);
-
-        const cloneAction = isObjectInstance(value) ? shallowClone : identity;
-        let safeValue = cloneAction(value);
-
-        const valueTypeStr = match(valueType, (matchCase, matchDefault) => {
-            matchCase(isString, valueType => valueType);
-            matchDefault(() => typeof value);
-        });
-
-        function boxType(transform) {
-            const returnValue = cloneAction(safeValue);
-            const transformation = isFunction(transform) ? transform : identity;
-
-            return transformation(returnValue);
-        }
-
-        return setStandardProperties(boxType, boxTypeName, valueTypeStr);
-    }
-
-    function boxWithType(boxTypeName) {
-        return function (valueType) {
-            return function (value) {
-                return boxValue(value, boxTypeName, valueType);
-            };
-        };
-    }
-
     const boxWith = signet.enforce(
         'boxTypeName:string => valueType:?composite<string, type> => value:* => *',
+
         function (boxType) {
-            if(isUndefined(boxTypeRegistry[boxType])) {
-                throw new Error (`'No box type "${boxType}" exists'`);
+            const boxTypeConstructor = registry.get(boxType);
+
+            if (isUndefined(boxTypeConstructor)) {
+                throw new Error(`'No box type "${boxType}" exists'`);
             }
 
-            return boxTypeRegistry[boxType];
+            return boxTypeConstructor;
         }
     );
 
-    register('TypedValue');
+    registry.register('TypedValue');
 
-    function typeWith(typeName) {
-        return boxWith('TypedValue')(typeName);
-    }
+    const typeWith = signet.sign(
+        'typeName:string => function',
+
+        function typeWith(typeName) {
+            return boxWith('TypedValue')(typeName);
+        }
+    );
 
     return {
         typeWith: typeWith,
@@ -238,7 +230,7 @@
         just: just,
         maybe: maybe,
         none: none,
-        register: register,
+        register: registry.register,
         some: some
     };
 
