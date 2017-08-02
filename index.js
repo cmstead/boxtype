@@ -39,14 +39,6 @@
     // const isNone = signet.isTypeOf('None');
     const isUndefined = signet.isTypeOf('undefined');
 
-    const registry = registryFactory(
-        signet,
-        match,
-        setStandardProperties,
-        throwOnBadType,
-        shallowClone
-    );
-
     const setProperty = signet.enforce(
         'boxFn:function, key:string, property:* => undefined',
 
@@ -198,6 +190,15 @@
             return result;
         }, container);
     }
+
+    const registry = registryFactory(
+        signet,
+        match,
+        setStandardProperties,
+        throwOnBadType,
+        shallowClone,
+        setProperty
+    );
 
     const boxWith = signet.enforce(
         'boxTypeName:string => valueType:?composite<string, type> => value:* => *',

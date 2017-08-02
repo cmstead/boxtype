@@ -15,7 +15,8 @@
     match,
     setStandardProperties,
     throwOnBadType,
-    shallowClone) {
+    shallowClone,
+    setProperty) {
     'use strict';
 
     let boxTypeRegistry = {};
@@ -79,6 +80,10 @@
         }
     );
 
+    function isVariant(typeStr) {
+        return /(^|\:)\s*variant/.test(typeStr);
+    }
+
     const boxValue = signet.sign(
         'value:*, boxTypeName:string, valueType:[composite<type, string>] => function',
 
@@ -90,6 +95,11 @@
 
             const safeValue = cloneAction(value);
             const boxType = buildBoxType(cloneAction, safeValue);
+
+            if (isVariant(valueType)) {
+                const typeTag = signet.whichVariantType(valueType)(value);
+                setProperty(boxType, 'typeTag', typeTag);
+            }
 
             return setStandardProperties(boxType, boxTypeName, valueTypeStr);
         }
@@ -103,7 +113,7 @@
 
             return function (valueType) {
                 return function (value) {
-                    if(!boxBaseType(value)) {
+                    if (!boxBaseType(value)) {
                         throw new Error(`Cannot cast value of type ${typeof value} to ${boxTypeName}`);
                     }
                     return boxValue(value, boxTypeName, valueType);
