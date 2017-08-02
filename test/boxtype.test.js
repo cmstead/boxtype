@@ -27,6 +27,12 @@ describe('boxtype', function () {
             assert.equal(result, 5);
         });
 
+        it('should unbox and return a value when value is boxed', function () {
+            const myValue = boxtype.typeWith('int')(99);
+            const result = boxtype.some(myValue);
+            assert.strictEqual(result, 99);
+        });
+
         it('should return none when called with undefined', function () {
             const result = boxtype.some();
             assert.equal(result, boxtype.none);
@@ -120,6 +126,12 @@ describe('boxtype', function () {
             assert.equal(typeCheck, true);
         });
 
+        it('should allow for defining a type check at registration', function () {
+            const boxInTypedContainer = boxtype.register('TypedContainer', 'composite<^array, object>');
+
+            assert.throws(boxInTypedContainer('object').bind(null, []));
+        });
+
     });
 
     describe('boxWith', function () {
@@ -199,6 +211,21 @@ describe('boxtype', function () {
 
             assert.equal(myResult.bar, 'foo');
             assert.equal(myResult.foo, undefined);
+        });
+
+        it('should recursively unbox values', function () {
+            const myBoxedValue = boxtype.typeWith('int')(10);
+            const myDoublyBoxedValue = boxtype.typeWith('TypedValue<int>')(myBoxedValue);
+
+            assert.strictEqual(myDoublyBoxedValue(), 10);
+        });
+
+        it('should recursively unbox values to specified depth', function () {
+            const myBoxedValue = boxtype.typeWith('int')(10);
+            const myDoublyBoxedValue = boxtype.typeWith('TypedValue<int>')(myBoxedValue);
+            const myUnboxedValue = myDoublyBoxedValue(null, 1);
+
+            assert.equal(signet.isTypeOf('TypedValue<int>')(myUnboxedValue), true);
         });
 
     });
