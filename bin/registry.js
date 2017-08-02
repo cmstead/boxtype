@@ -123,7 +123,7 @@
     );
 
     const register = signet.enforce(
-        'boxTypeName:string, baseType:[type] => function',
+        'boxTypeName:string, baseType:[type] => boxTypeConstructor:function',
 
         function register(boxTypeName, baseType) {
             const boxingFunction = boxWithType(boxTypeName, baseType);
