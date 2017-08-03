@@ -26,7 +26,7 @@ const boxtype = require('boxtype')(signet);
 This library was born out of a conversation between [https - //github.com/cmstead](Chris Stead) and [https - //github.com/jason-kerney](Jason Kerney) contemplating the idea of types and type safety, while looking at this code - 
 
 ```
-const cons = (a, b) => (x) => x ? a  - ;
+const cons = (a, b) => (x) => x ? a : b;
 const car = list => list(true);
 const cdr = list => list(false);
 ```
