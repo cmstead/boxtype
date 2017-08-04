@@ -228,6 +228,12 @@ describe('boxtype', function () {
             assert.equal(signet.isTypeOf('TypedValue<int>')(myUnboxedValue), true);
         });
 
+        it('should tag value type when using a variant type', function () {
+            const myBoxedValue = boxtype.typeWith('someTypeName:variant<int, string>')('foo');
+
+            assert.equal(myBoxedValue.toString(), '[TypedValue string](foo)');
+        });
+
     });
 
 });

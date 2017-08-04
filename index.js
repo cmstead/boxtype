@@ -39,14 +39,6 @@
     // const isNone = signet.isTypeOf('None');
     const isUndefined = signet.isTypeOf('undefined');
 
-    const registry = registryFactory(
-        signet,
-        match,
-        setStandardProperties,
-        throwOnBadType,
-        shallowClone
-    );
-
     const setProperty = signet.enforce(
         'boxFn:function, key:string, property:* => undefined',
 
@@ -146,7 +138,7 @@
     );
 
     const some = signet.enforce(
-        'value:* => *',
+        'value:* => unBoxed:*',
 
         function some(value) {
             return match(value, (matchCase, matchDefault) => {
@@ -199,8 +191,17 @@
         }, container);
     }
 
+    const registry = registryFactory(
+        signet,
+        match,
+        setStandardProperties,
+        throwOnBadType,
+        shallowClone,
+        setProperty
+    );
+
     const boxWith = signet.enforce(
-        'boxTypeName:string => valueType:?composite<string, type> => value:* => *',
+        'boxTypeName:string => valueType:?composite<string, type> => value:* => boxType',
 
         function (boxType) {
             const boxTypeConstructor = registry.get(boxType);
@@ -216,7 +217,7 @@
     registry.register('TypedValue');
 
     const typeWith = signet.sign(
-        'typeName:string => function',
+        'typeName:string => boxType',
 
         function typeWith(typeName) {
             return boxWith('TypedValue')(typeName);
